@@ -9,6 +9,7 @@ from assignment.agent.base import (
     DEFAULT_COMPACTION_KEEP_RECENT_STEPS,
     DEFAULT_COMPACTION_MAX_TOKENS,
     Agent,
+    format_tool_output
 )
 from assignment.agent.tools import EXECUTE_TOOL, SEND_MESSAGE_TOOL
 from assignment.env import Environment
@@ -64,6 +65,9 @@ class CodeAgent(Agent):
         # TODO(1.4): If any skills are available to the agent, make their
         # descriptions/metadata available to the agent in the prompt.
 
+        self.tools.extend([EXECUTE_TOOL, SEND_MESSAGE_TOOL])
+
+#another implementation is that every tool has its own execute function
     def execute_tool_calls(
         self, tool_calls: list[dict[str, Any]]
     ) -> list[dict[str, str]]:
@@ -73,4 +77,63 @@ class CodeAgent(Agent):
         # one message per call (there may be multiple tool calls in one agent
         # response!). Malformed JSON and unknown tools must become recoverable
         # observations relayed to the agent instead of exceptions.
-        raise NotImplementedError
+
+        observations: list[dict[str, str]] = []
+        for tool in tool_calls:
+            if self.finished:
+                result = {"error": "Task already submitted; this call was not executed."}
+            else:
+                function = tool.get("function")
+                if not isinstance(function, dict):
+                    result = {"error": "function must be an object."}
+                elif not isinstance(function.get("arguments"), str):
+                    result = {"error": "arguments must be a JSON string."}
+                else:
+                    name = function.get("name")
+                    try:
+                        arguments = json.loads(function["arguments"])
+                    except json.JSONDecodeError as exc:
+                        result = {"error": f"Invalid JSON arguments: {exc.msg}"}
+                    else:
+                        if (not isinstance(arguments, dict)):
+                            result = {"error": "Tool arguments must be a JSON object."}
+
+                        elif (name == "execute"):
+                            command = arguments.get("command")
+                            valid_command = (
+                                isinstance(command, str)
+                                or (
+                                    isinstance(command, list)
+                                    and all(isinstance(item, str) for item in command)
+                                )
+                            )
+
+                            if not valid_command:
+                                result = {
+                                    "error": "command is required and must be a string or a list of strings."
+                                }
+                            else:
+                                cwd = arguments.get("cwd")
+                                timeout = arguments.get("timeout")
+                                env = arguments.get("env")
+                                shell = arguments.get("shell")
+                                result = self.env.execute(command = command, cwd = cwd, timeout = timeout, env = env, shell = shell)
+                        
+                        
+                        elif (name == "send_message"):
+                            summary = arguments.get("summary")
+                            if (not isinstance(summary, str)):
+                                result = {"error": "summary is required and must be a string"}
+
+                            else:
+                                print(summary)
+                                self.finished = True
+                                result = {"status": "submitted"}
+                        
+                        else:
+                            result = {"error": f"unknown_tool: {name}"}
+
+                
+            observations.append({"role": "tool", "tool_call_id": tool.get("id"), "content": format_tool_output(result)})
+        return observations
+                
