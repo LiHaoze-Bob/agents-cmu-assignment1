@@ -147,6 +147,8 @@ class Agent:
             self.load_skills(self.skills_path) if self.skills_path is not None else {}
         )
 
+        self.history: list[dict[str, Any]] = []
+
         if self.skills:
             self.tools.append(INVOKE_SKILL_TOOL)
 
@@ -227,7 +229,14 @@ class Agent:
 
         # You want to be careful about which attributes of the class you modify
         # here as they may also be handled by the subclasses.
-        raise NotImplementedError
+
+        messages: list[dict[str, Any]] = []
+        messages.append({"role": "system", "content": self.system_prompt})
+        messages.append({"role": "user", "content": self.task_prompt})
+        messages.extend(self.history)
+        
+        return messages
+      
 
     def estimate_active_prompt_tokens(self) -> int:
         """Estimate the next prompt, calibrated by the provider's latest usage."""
