@@ -134,7 +134,33 @@ class CodeAgent(Agent):
                                 timeout = arguments.get("timeout")
                                 env = arguments.get("env")
                                 shell = arguments.get("shell")
-                                result = self.env.execute(command = command, cwd = cwd, timeout = timeout, env = env, shell = shell)
+                                if cwd is not None and not isinstance(cwd, str):
+                                    result = {"error": "cwd must be a string or null."}
+                                elif timeout is not None and (
+                                    isinstance(timeout, bool)
+                                    or not isinstance(timeout, (int, float))
+                                ):
+                                    result = {"error": "timeout must be a number or null."}
+                                elif env is not None and (
+                                    not isinstance(env, dict)
+                                    or not all(
+                                        isinstance(key, str) and isinstance(value, str)
+                                        for key, value in env.items()
+                                    )
+                                ):
+                                    result = {
+                                        "error": "env must be an object with string keys and values, or null."
+                                    }
+                                elif shell is not None and not isinstance(shell, bool):
+                                    result = {"error": "shell must be a boolean or null."}
+                                else:
+                                    result = self.env.execute(
+                                        command=command,
+                                        cwd=cwd,
+                                        timeout=timeout,
+                                        env=env,
+                                        shell=shell,
+                                    )
                         
                         
                         elif (name == "send_message"):
