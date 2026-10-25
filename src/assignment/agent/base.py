@@ -11,6 +11,7 @@ import json
 import logging
 import math
 import os
+import yaml
 from pathlib import Path
 from typing import Any
 
@@ -166,7 +167,62 @@ class Agent:
         # ``content`` of the skill file for ``invoke_skill``. Reject duplicate
         # names and malformed or missing frontmatter with a clear
         # ``ValueError``.
-        raise NotImplementedError
+        if not skills_path.is_dir():
+            raise ValueError(f"Skills path must be a directory: {skills_path}")
+        skill_catalog: dict[str, dict[str, str]] = {}
+
+        for child in skills_path.iterdir():
+            if not child.is_dir():
+                continue
+            skill_file = child/"SKILL.md"
+            if not skill_file.is_file():
+                raise ValueError(f"Missing SKILL.md in skill directory: {child}")
+            try:
+                text = skill_file.read_text(encoding = "utf-8")
+            except (OSError, UnicodeError) as exc:
+                raise ValueError(f"Cannot read skill file: {skill_file}") from exc
+            
+            lines = text.splitlines()
+            if not lines or lines[0].strip() != "---":
+                raise ValueError(f"Missing opening frontmatter marker: {skill_file}")
+            closing_index = None
+            for index in range(1, len(lines)):
+                if (lines[index].strip() == "---"):
+                    closing_index = index
+                    break
+            if closing_index is None:
+                raise ValueError(f"Missing closing frontmatter marker: {skill_file}")
+            
+            yaml_text = "\n".join(lines[1:closing_index])
+
+            try:
+                data = yaml.safe_load(yaml_text)
+            except yaml.YAMLError as exc:
+                raise ValueError(f"Invalid YAML frontmatter: {skill_file}") from exc
+            if not isinstance(data, dict):
+                raise ValueError(f"Frontmatter must be a mapping: {skill_file}")
+
+            name = data.get("name")
+            description = data.get("description")
+
+            if not isinstance(name, str) or not name.strip():
+                raise ValueError(f"Skill name must be a non-empty string: {skill_file}")
+
+            if not isinstance(description, str) or not description.strip():
+                raise ValueError(
+                    f"Skill description must be a non-empty string: {skill_file}"
+                )
+
+            if name in skill_catalog:
+                raise ValueError(f"Duplicate skill name {name!r}: {skill_file}")
+
+            skill_catalog[name] = {
+                "metadata": f"name: {name}\ndescription: {description}",
+                "content": text,
+            }
+
+        return skill_catalog
+      
 
     def query_language_model(self) -> dict[str, Any]:
         """Send one tool-enabled Chat Completions request and normalize it."""

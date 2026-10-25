@@ -47,6 +47,8 @@ class CodeAgent(Agent):
         # TODO(Part 1.3): Make the `execute` and `send_message` tools available
         # to the agent.
 
+        self.tools.extend([EXECUTE_TOOL, SEND_MESSAGE_TOOL])
+
         # TODO(1.1.b): Construct the system prompt and task_prompt. These
         # should be usable by the `Agent.build_prompt` method.
 
@@ -65,7 +67,22 @@ class CodeAgent(Agent):
         # TODO(1.4): If any skills are available to the agent, make their
         # descriptions/metadata available to the agent in the prompt.
 
-        self.tools.extend([EXECUTE_TOOL, SEND_MESSAGE_TOOL])
+        skill_metadata: str = ""
+        if self.skills:  
+            skill_metadata = "\n".join(skill["metadata"] for skill in self.skills.values())
+            self.system_prompt += (
+                "\n\nReusable skills are available below. "
+                "The catalog contains each skill's name and description. "
+                "Call `invoke_skill` with the `name` parameter set to a "
+                "listed skill name to read its full instructions. "
+                "Follow the instructions when using that skill."
+                "\n\n<skills>\n"
+                f"{skill_metadata}\n"
+                "</skills>"
+            )
+            
+        
+  
 
 #another implementation is that every tool has its own execute function
     def execute_tool_calls(
@@ -129,7 +146,36 @@ class CodeAgent(Agent):
                                 print(summary)
                                 self.finished = True
                                 result = {"status": "submitted"}
-                        
+
+                        elif (name == "invoke_skill"):
+                            skill_name = arguments.get("name")
+                            if not self.skills:
+                                result = {
+                                    "error": "No skills are available."
+                                }
+                            elif (
+                                not isinstance(skill_name, str)
+                                or not skill_name.strip()
+                            ):
+                                result = {
+                                    "error": (
+                                        "name is required and must be "
+                                        "a non-empty string."
+                                    )
+                                }
+                            elif skill_name not in self.skills:
+                                result = {
+                                    "error": f"Unknown skill: {skill_name}"
+                                }
+                            else:
+                                observations.append(
+                                    {
+                                        "role": "tool",
+                                        "tool_call_id": tool.get("id"),
+                                        "content": self.skills[skill_name]["content"],
+                                    }
+                                )
+                                continue
                         else:
                             result = {"error": f"unknown_tool: {name}"}
 
