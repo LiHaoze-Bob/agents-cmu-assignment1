@@ -479,6 +479,9 @@ class Agent:
             while(not self.finished):
                 if (self.steps_taken >= self.step_limit):
                     raise StepLimitError
+                
+                self.maybe_compact_context()
+                
                 message = self.query_language_model()
                 self.history.append(message)
                 
@@ -493,6 +496,8 @@ class Agent:
             # request in your shared loop. It already estimates active tokens
             # and handles the threshold, and tracks compaction events for
             # logging.
+
+    
 
 
         finally:
