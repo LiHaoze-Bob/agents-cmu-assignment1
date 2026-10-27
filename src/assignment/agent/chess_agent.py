@@ -107,7 +107,7 @@ class ChessAgent(Agent):
         )
 
         # TODO(Part 3): Register the play_move tool schema from tools.py.
-
+        self.tools.append(PLAY_MOVE_TOOL)
         if programmatic_tools:
             self.tools.append(RUN_PYTHON_TOOL)
 
