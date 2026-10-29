@@ -174,7 +174,48 @@ class ChessAgent(Agent):
         # 4. Link every observation to its call with tool_call_id.
         # 5. Turn malformed, unknown, rejected, or extra parallel calls into
         #    recoverable <chess_error> observations instead of crashing.
+        observations: list[dict[str, str]] = []
+        move_attempted = False
+        registered_names = {tool["function"]["name"] for tool in self.tools}
+        for call in tool_calls:
+            try:
+                function = call.get("function")
+                if not isinstance(function, dict):
+                    raise ValueError("fucntion must be an object")
+                name = function.get("name")
+                arguments = function.get("arguments")
+                if not isinstance(arguments, str):
+                    raise ValueError("arguments must be a JSON string")
+                if name not in registered_names:
+                    raise ValueError("Tool is not registered")
+
+                if name == "play_move":
+                    if self.finished:
+                        raise ValueError("The game is already over.")
+                    if move_attempted:
+                        raise ValueError("Only one play_move call is allowed per batch.")
+
+                    move_attempted = True
+                    result = _play_move(self.chess_client, arguments)
+
+                    if result.startswith("<chess_error>"):
+                        content = result
+                    else:
+                        state = json.loads(result)
+                        self.last_state = state
+                        self.finished = bool(state.get("game_over"))
+                        content = self.format_state(state)
+                else:
+                    raise ValueError("Unsupported tool")
+            except Exception as exc:
+                content = f"<chess_error>{str(exc)}</chess_error>"
+
+            observations.append({
+                "role": "tool",
+                "tool_call_id": call.get("id"),
+                "content": content,
+            })
+        return observations
 
         # TODO(Part 3.3-4): add cases for simulate_move and run_python, with
         # linked observations and recoverable errors, just like the old tool.
-        raise NotImplementedError

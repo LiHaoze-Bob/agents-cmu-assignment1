@@ -528,4 +528,3 @@ class Agent:
 
         # You do not need to implement anything here. This method is
         # domain-specific and implemented by the relevant subclasses
-        raise NotImplementedError
